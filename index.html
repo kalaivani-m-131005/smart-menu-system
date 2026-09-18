@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#ea780c">
+  <title>Central Cafe — Menu & Order</title>
+
+  <!-- ===== Fonts: Inter ================================================== -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- ===== Tailwind CSS (Play CDN — no build tools) ====================== -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'] },
+          colors: {
+            brand: { 50:'#fff7ed',100:'#ffedd5',500:'#f97316',600:'#ea780c',700:'#c2410c' },
+          },
+        },
+      },
+    };
+  </script>
+
+  <!-- ===== Page-specific styles ========================================== -->
+  <style>
+    /* Hide the menu briefly until the first render paints — prevents the
+       flash of empty content before Firebase's first snapshot arrives. */
+    html:not([data-ready]) body { visibility: hidden; }
+
+    html { scroll-behavior: smooth; }
+    body {
+      background:
+        radial-gradient(1200px 400px at 50% -10%, #ffedd5 0%, transparent 70%),
+        #f8fafc;
+      padding-bottom: 96px; /* room for the sticky cart bar */
+    }
+    body.no-scroll { overflow: hidden; }
+
+    /* ---- Connection badge ------------------------------------------- */
+    .conn-dot {
+      width: 8px; height: 8px; border-radius: 9999px; background: #10b981;
+      box-shadow: 0 0 0 0 rgba(16,185,129,.6);
+      animation: conn-pulse 1.8s ease-out infinite;
+    }
+    @keyframes conn-pulse {
+      0%   { box-shadow: 0 0 0 0 rgba(16,185,129,.55); }
+      70%  { box-shadow: 0 0 0 7px rgba(16,185,129,0); }
+      100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+    }
+    [data-conn-badge].conn-off .conn-dot {
+      background: #f87171; animation: none; box-shadow: none;
+    }
+
+    /* ---- Category pills ---------------------------------------------- */
+    .cat-pill {
+      display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+      padding: 7px 14px; border-radius: 9999px; font-size: 13px; font-weight: 600;
+      background: #fff; color: #475569; border: 1px solid #e2e8f0;
+      transition: all .15s ease; cursor: pointer; flex-shrink: 0;
+    }
+    .cat-pill .count {
+      font-size: 11px; font-weight: 700; color: #94a3b8;
+      background: #f1f5f9; border-radius: 9999px; padding: 1px 7px;
+    }
+    .cat-pill.cat-active {
+      background: #ea780c; border-color: #ea780c; color: #fff;
+      box-shadow: 0 4px 12px rgba(234,120,12,.35);
+    }
+    .cat-pill.cat-active .count { background: rgba(255,255,255,.25); color: #fff; }
+
+    /* ---- Menu cards --------------------------------------------------- */
+    .menu-card {
+      background: #fff; border-radius: 18px; overflow: hidden;
+      box-shadow: 0 1px 3px rgba(15,23,42,.08), 0 8px 24px rgba(15,23,42,.05);
+      transition: opacity .25s ease; display: flex; flex-direction: column;
+    }
+    .menu-card.soldout { opacity: .55; filter: grayscale(.35); }
+    .card-thumb { position: relative; height: 120px; overflow: hidden; }
+    .card-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .img-fallback {
+      width: 100%; height: 100%; display: flex; align-items: center;
+      justify-content: center; font-weight: 800; font-size: 26px; letter-spacing: .5px;
+    }
+    .badge-soldout {
+      position: absolute; top: 8px; right: 8px; background: #dc2626; color: #fff;
+      font-size: 10px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase;
+      padding: 4px 8px; border-radius: 9999px; box-shadow: 0 2px 6px rgba(220,38,38,.4);
+    }
+    .badge-qty {
+      position: absolute; bottom: 8px; right: 8px; background: rgba(15,23,42,.82);
+      color: #fff; font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: 9999px;
+    }
+    .cat-chip {
+      display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .3px;
+      text-transform: uppercase; color: #c2410c; background: #fff7ed;
+      padding: 2px 8px; border-radius: 9999px;
+    }
+    .veg-dot {
+      width: 12px; height: 12px; border: 1.5px solid #16a34a; border-radius: 2px;
+      display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .veg-dot::after { content: ''; width: 6px; height: 6px; border-radius: 9999px; background: #16a34a; }
+
+    /* ---- Add button & steppers ---------------------------------------- */
+    .add-btn {
+      background: #ea780c; color: #fff; font-weight: 700; font-size: 13px;
+      padding: 7px 18px; border-radius: 10px; border: none; cursor: pointer;
+      transition: transform .12s ease, background .15s ease;
+      box-shadow: 0 2px 8px rgba(234,120,12,.35);
+    }
+    .add-btn:not(:disabled):active { transform: scale(.94); }
+    .add-btn:disabled { background: #e2e8f0; color: #94a3b8; cursor: not-allowed; box-shadow: none; }
+    .stepper {
+      display: inline-flex; align-items: center; background: #ea780c;
+      border-radius: 10px; overflow: hidden; box-shadow: 0 2px 8px rgba(234,120,12,.35);
+    }
+    .step-btn {
+      width: 30px; height: 30px; background: transparent; border: none;
+      color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; line-height: 1;
+    }
+    .step-btn:active { background: rgba(255,255,255,.2); }
+    .step-n { min-width: 22px; text-align: center; color: #fff; font-weight: 700; font-size: 13px; }
+    .stepper.small .step-btn { width: 26px; height: 26px; font-size: 14px; }
+    .stepper.small .step-n { min-width: 18px; font-size: 12px; }
+
+    /* ---- Sticky cart bar (FAB) ---------------------------------------- */
+    .cart-fab {
+      position: fixed; left: 14px; right: 14px; bottom: 14px; z-index: 40;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      background: linear-gradient(135deg, #ea780c, #c2410c); color: #fff;
+      border: none; border-radius: 16px; padding: 14px 18px; cursor: pointer;
+      box-shadow: 0 12px 32px rgba(194,65,12,.45);
+      transition: transform .2s ease, opacity .2s ease, filter .15s ease;
+    }
+    .cart-fab:disabled { filter: grayscale(.45) brightness(.96); cursor: default; }
+    .cart-fab.has-items:not(:disabled):active { transform: scale(.985); }
+    .cart-fab.bump { animation: fab-bump .35s ease; }
+    @keyframes fab-bump { 0% { transform: scale(1); } 40% { transform: scale(1.03); } 100% { transform: scale(1); } }
+
+    /* ---- Cart drawer ---------------------------------------------------- */
+    .drawer-scrim {
+      position: fixed; inset: 0; background: rgba(15,23,42,.5); z-index: 50;
+      opacity: 0; pointer-events: none; transition: opacity .25s ease;
+    }
+    .drawer-scrim.show { opacity: 1; pointer-events: auto; }
+    .cart-drawer {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
+      background: #fff; border-radius: 22px 22px 0 0;
+      max-height: 88vh; display: flex; flex-direction: column;
+      transform: translateY(105%); transition: transform .32s cubic-bezier(.32,.72,.28,1);
+      box-shadow: 0 -12px 48px rgba(15,23,42,.2);
+    }
+    .cart-drawer.open { transform: translateY(0); }
+    .line { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px dashed #e2e8f0; }
+    .line:last-child { border-bottom: none; }
+    .line-thumb, .line-thumb img { width: 48px; height: 48px; border-radius: 12px; object-fit: cover; }
+    .line-thumb { overflow: hidden; flex-shrink: 0; }
+    .line-remove { background: none; border: none; cursor: pointer; font-size: 14px; opacity: .5; padding: 4px; }
+    .line-remove:hover { opacity: 1; }
+    .invalid { border-color: #dc2626 !important; }
+    .err-text { color: #dc2626; font-size: 12px; margin-top: 4px; }
+    .empty-cart { text-align: center; padding: 40px 20px; color: #94a3b8; }
+    .empty-cart-icon { font-size: 44px; margin-bottom: 10px; }
+    .empty-cart p { font-size: 14px; line-height: 1.6; }
+    input.field, textarea.field {
+      width: 100%; border: 1.5px solid #e2e8f0; border-radius: 12px;
+      padding: 11px 14px; font-size: 14px; outline: none; background: #f8fafc;
+      transition: border-color .15s ease, background .15s ease;
+    }
+    input.field:focus, textarea.field:focus { border-color: #ea780c; background: #fff; }
+
+    /* ---- Utility --------------------------------------------------------- */
+    .hidden { display: none !important; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    @media (prefers-reduced-motion: reduce) {
+      * { animation: none !important; transition: none !important; }
+    }
+  </style>
+</head>
+
+<body class="font-sans text-slate-800 antialiased">
+
+  <!-- =====================================================================
+       STICKY HEADER — shop identity, live connection pulse, search
+       ===================================================================== -->
+  <header class="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-100 shadow-sm">
+    <div class="max-w-xl mx-auto px-4 pt-3 pb-2">
+
+      <!-- Row 1: identity + connection badge -->
+      <div class="flex items-center justify-between gap-3">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-xl shadow-md shrink-0">☕</div>
+          <div class="min-w-0">
+            <h1 class="text-lg font-extrabold leading-tight truncate">☕ Central Cafe</h1>
+            <p class="text-[11px] text-slate-400 leading-tight">Fresh • Fast • Table Service</p>
+          </div>
+        </div>
+
+        <!-- Live connection pulse badge (driven by app.js §4) -->
+        <span id="conn-badge" data-conn-badge
+              class="conn-badge flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100 shrink-0">
+          <span class="conn-dot"></span><span class="label">Live</span>
+        </span>
+      </div>
+
+      <!-- Row 2: real-time search -->
+      <div class="relative mt-3">
+        <svg class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none"
+             fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z"/>
+        </svg>
+        <input id="search-input" type="search" placeholder="Search coffee, dosa, samosa…"
+               autocomplete="off"
+               class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm outline-none focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-100 transition" />
+      </div>
+    </div>
+  </header>
+
+  <!-- =====================================================================
+       CATEGORY FILTER BAR — horizontal scrollable pills
+       ===================================================================== -->
+  <nav class="sticky top-[104px] z-20 bg-[#f8fafc]/95 backdrop-blur-sm py-2.5 border-b border-slate-100/60">
+    <div id="category-pills" class="no-scrollbar flex gap-2 overflow-x-auto px-4 max-w-xl mx-auto">
+      <!-- Pills injected by app.js renderMenu() — e.g. All, Hot Drinks, Snacks, Tiffin -->
+    </div>
+  </nav>
+
+  <!-- =====================================================================
+       MENU GRID — dynamic cards rendered from the live DB
+       ===================================================================== -->
+  <main class="max-w-xl mx-auto px-4 pt-3">
+    <div id="menu-grid" class="grid grid-cols-2 gap-3.5">
+      <!-- Menu cards injected by app.js renderMenu() -->
+    </div>
+
+    <!-- Empty state: shown when search/filter matches nothing -->
+    <div id="empty-state" class="hidden text-center py-16">
+      <div class="text-5xl mb-3">🔍</div>
+      <p class="font-semibold text-slate-600">No items found</p>
+      <p class="text-sm text-slate-400 mt-1">Try a different search or category.</p>
+    </div>
+
+    <p class="text-center text-[11px] text-slate-400 mt-8 pb-4">
+      Prices include all taxes • Order directly to your table via WhatsApp
+    </p>
+  </main>
+
+  <!-- =====================================================================
+       STICKY BOTTOM CART SUMMARY BAR
+       ===================================================================== -->
+  <button id="cart-fab" class="cart-fab" disabled aria-label="Open cart">
+    <span class="flex items-center gap-3">
+      <span class="relative">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round"
+                d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
+        </svg>
+        <span class="fab-badge absolute -top-1.5 -right-2 bg-white text-brand-700 text-[10px] font-extrabold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 hidden">0</span>
+      </span>
+      <span class="fab-count text-sm font-semibold">Cart empty</span>
+    </span>
+    <span class="fab-total text-base font-extrabold">₹0</span>
+  </button>
+
+  <!-- =====================================================================
+       CHECKOUT DRAWER (bottom sheet)
+       ===================================================================== -->
+  <div id="drawer-scrim" class="drawer-scrim" data-close-cart></div>
+
+  <section id="cart-drawer" class="cart-drawer" role="dialog" aria-modal="true" aria-label="Your order">
+    <!-- Drawer handle + title -->
+    <div class="pt-3 pb-1 flex justify-center shrink-0">
+      <div class="w-10 h-1.5 rounded-full bg-slate-200"></div>
+    </div>
+    <div class="px-5 pb-2 flex items-center justify-between shrink-0">
+      <h2 class="text-lg font-extrabold">Your Order</h2>
+      <button data-close-cart class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center text-lg leading-none" aria-label="Close cart">×</button>
+    </div>
+
+    <div class="overflow-y-auto px-5 grow">
+      <!-- Itemised lines injected by app.js renderCartDrawer() -->
+      <div id="cart-lines"></div>
+
+      <!-- ================================================================
+           CHECKOUT FORM — table number required, name/note optional
+           ================================================================ -->
+      <form id="checkout-form" class="pb-4" novalidate>
+        <div class="border-t border-dashed border-slate-200 pt-4 space-y-3">
+          <div>
+            <label for="table-no" class="block text-xs font-bold text-slate-600 mb-1.5">
+              Table Number <span class="text-red-500">*</span>
+            </label>
+            <input id="table-no" class="field" type="text" inputmode="text"
+                   placeholder="e.g. 12 or A1" autocomplete="off" maxlength="6">
+            <p id="table-no-err" class="err-text hidden">Table number is required.</p>
+          </div>
+
+          <div>
+            <label for="cust-name" class="block text-xs font-bold text-slate-600 mb-1.5">
+              Your Name <span class="text-slate-300 font-medium">(optional)</span>
+            </label>
+            <input id="cust-name" class="field" type="text" placeholder="For order confirmation" maxlength="40">
+          </div>
+
+          <div>
+            <label for="note" class="block text-xs font-bold text-slate-600 mb-1.5">
+              Special Instructions <span class="text-slate-300 font-medium">(optional)</span>
+            </label>
+            <textarea id="note" class="field" rows="2" maxlength="200"
+                      placeholder="Less spicy, no onion, extra chutney…"></textarea>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- Drawer footer: grand total + WhatsApp dispatch -->
+    <div id="cart-footer" class="shrink-0 border-t border-slate-100 bg-white px-5 py-3.5">
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-sm font-semibold text-slate-500">Grand Total</span>
+        <span id="cart-total" class="text-xl font-extrabold">₹0</span>
+      </div>
+      <button type="submit" form="checkout-form"
+              class="w-full bg-[#25D366] hover:bg-[#1eb856] active:scale-[.99] text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2.5 transition shadow-lg shadow-green-500/25">
+        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+        </svg>
+        Send Order via WhatsApp
+      </button>
+      <p class="text-center text-[10px] text-slate-400 mt-2">
+        You'll review the order in WhatsApp before it's sent to the cafe.
+      </p>
+    </div>
+  </section>
+
+  <!-- ===== Firebase (v9 compat build → classic v8-style API) ============== -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+  <!-- ===== App engine (shared with admin.html) ============================ -->
+  <script src="app.js"></script>
+</body>
+</html>

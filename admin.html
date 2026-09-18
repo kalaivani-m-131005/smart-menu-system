@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0f172a">
+  <title>Central Cafe — Owner Dashboard</title>
+
+  <!-- ===== Fonts: Inter ================================================== -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- ===== Tailwind CSS (Play CDN — no build tools) ====================== -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'] },
+          colors: {
+            brand: { 50:'#fff7ed',100:'#ffedd5',500:'#f97316',600:'#ea780c',700:'#c2410c' },
+          },
+        },
+      },
+    };
+  </script>
+
+  <!-- ===== Page-specific styles ========================================== -->
+  <style>
+    body { background: #f1f5f9; }
+
+    /* ---- Connection badge (mirrors index.html) ------------------------ */
+    .dot {
+      width: 8px; height: 8px; border-radius: 9999px; background: #10b981;
+      box-shadow: 0 0 0 0 rgba(16,185,129,.6);
+      animation: conn-pulse 1.8s ease-out infinite;
+    }
+    @keyframes conn-pulse {
+      0%   { box-shadow: 0 0 0 0 rgba(16,185,129,.55); }
+      70%  { box-shadow: 0 0 0 7px rgba(16,185,129,0); }
+      100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+    }
+    [data-conn-badge].conn-off .dot { background: #f87171; animation: none; box-shadow: none; }
+
+    /* ---- Inventory table ----------------------------------------------- */
+    .inv-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 14px; }
+    .inv-table thead th {
+      position: sticky; top: 0; z-index: 5; background: #f8fafc;
+      text-align: left; font-size: 11px; font-weight: 700; letter-spacing: .06em;
+      text-transform: uppercase; color: #64748b; padding: 12px 16px;
+      border-bottom: 1px solid #e2e8f0; white-space: nowrap;
+    }
+    .inv-table tbody td { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+    .inv-table tbody tr { transition: background .15s ease; }
+    .inv-table tbody tr:hover { background: #f8fafc; }
+    .inv-table tbody tr.row-soldout { background: #fef2f2; }
+    .inv-table tbody tr.row-soldout:hover { background: #fee2e2; }
+    .row-thumb { width: 44px; height: 44px; border-radius: 10px; object-fit: cover; display: block; }
+    .img-fallback {
+      width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 14px; border-radius: 10px;
+    }
+    .cell-name { font-weight: 600; color: #0f172a; }
+    .cell-id   { font-size: 11px; color: #94a3b8; font-family: ui-monospace, monospace; }
+    .cell-price{ font-weight: 700; white-space: nowrap; }
+    .row-soldout .cell-name { text-decoration: line-through; text-decoration-color: #fca5a5; }
+    .cat-chip {
+      display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .3px;
+      text-transform: uppercase; color: #c2410c; background: #fff7ed;
+      padding: 3px 9px; border-radius: 9999px; white-space: nowrap;
+    }
+
+    /* ---- Stock toggle switch -------------------------------------------- */
+    .switch { position: relative; display: inline-block; width: 46px; height: 25px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; inset: 0; background: #e2e8f0; border-radius: 9999px;
+      cursor: pointer; transition: background .2s ease;
+    }
+    .slider::before {
+      content: ''; position: absolute; width: 19px; height: 19px; left: 3px; top: 3px;
+      background: #fff; border-radius: 50%; transition: transform .2s ease;
+      box-shadow: 0 1px 3px rgba(15,23,42,.3);
+    }
+    .switch input:checked + .slider { background: #10b981; }
+    .switch input:not(:checked) + .slider { background: #f87171; }
+    .switch input:checked + .slider::before { transform: translateX(21px); }
+
+    /* ---- Row action buttons ---------------------------------------------- */
+    .icon-btn {
+      width: 34px; height: 34px; border-radius: 10px; border: 1px solid #e2e8f0;
+      background: #fff; cursor: pointer; font-size: 14px; line-height: 1;
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: all .15s ease;
+    }
+    .icon-btn:hover { transform: translateY(-1px); box-shadow: 0 3px 8px rgba(15,23,42,.08); }
+    .icon-btn.edit:hover { border-color: #ea780c; background: #fff7ed; }
+    .icon-btn.del:hover  { border-color: #dc2626; background: #fef2f2; }
+
+    /* ---- Add / Edit modal -------------------------------------------------- */
+    .modal {
+      position: fixed; inset: 0; z-index: 60; display: flex;
+      align-items: center; justify-content: center; padding: 16px;
+      opacity: 0; pointer-events: none; transition: opacity .2s ease;
+    }
+    .modal.open { opacity: 1; pointer-events: auto; }
+    .modal-scrim { position: absolute; inset: 0; background: rgba(15,23,42,.55); backdrop-filter: blur(2px); }
+    .modal-card {
+      position: relative; width: 100%; max-width: 440px; background: #fff;
+      border-radius: 20px; box-shadow: 0 24px 64px rgba(15,23,42,.3);
+      transform: translateY(14px) scale(.98); transition: transform .22s ease;
+      max-height: 92vh; display: flex; flex-direction: column;
+    }
+    .modal.open .modal-card { transform: translateY(0) scale(1); }
+
+    input.field, select.field {
+      width: 100%; border: 1.5px solid #e2e8f0; border-radius: 12px;
+      padding: 11px 14px; font-size: 14px; outline: none; background: #f8fafc;
+      transition: border-color .15s ease, background .15s ease;
+    }
+    input.field:focus, select.field:focus { border-color: #ea780c; background: #fff; }
+    .invalid { border-color: #dc2626 !important; }
+    .err-text { color: #dc2626; font-size: 12px; margin-top: 4px; }
+
+    .hidden { display: none !important; }
+    @media (prefers-reduced-motion: reduce) {
+      * { animation: none !important; transition: none !important; }
+    }
+  </style>
+</head>
+
+<body class="font-sans text-slate-800 antialiased">
+
+  <!-- =====================================================================
+       TOP NAVIGATION — title, live connection badge, add-item trigger
+       ===================================================================== -->
+  <header class="sticky top-0 z-30 bg-white border-b border-slate-200 shadow-sm">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-800 to-slate-600 flex items-center justify-center text-xl shadow shrink-0">☕</div>
+        <div class="min-w-0">
+          <h1 class="text-base sm:text-lg font-extrabold leading-tight truncate">Central Cafe — Owner Dashboard</h1>
+          <p class="text-[11px] text-slate-400 leading-tight">Live menu & inventory control</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 shrink-0">
+        <!-- Live connection badge (driven by app.js §4) -->
+        <span data-conn-badge
+              class="hidden sm:flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
+          <span class="dot"></span><span class="label">Live</span>
+        </span>
+
+        <!-- Compact connection badge for small screens -->
+        <span data-conn-badge
+              class="sm:hidden flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
+          <span class="dot"></span><span class="label">Live</span>
+        </span>
+
+        <button data-open-add
+                class="bg-brand-600 hover:bg-brand-700 active:scale-[.98] text-white text-sm font-bold px-3.5 sm:px-4 py-2.5 rounded-xl shadow-lg shadow-orange-500/25 transition flex items-center gap-1.5">
+          <span class="text-lg leading-none">+</span><span class="hidden xs:inline sm:inline">Add New Item</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Demo-mode banner: only visible when Firebase config is still placeholder -->
+  <div id="demo-banner" class="hidden max-w-6xl mx-auto px-4 sm:px-6 mt-4">
+    <div class="bg-amber-50 border border-amber-200 text-amber-800 text-xs sm:text-sm rounded-xl px-4 py-3 flex items-start gap-2">
+      <span>⚡</span>
+      <p><b>Demo Mode</b> — data lives in this browser (syncs across tabs).
+         Add your Firebase keys in <code class="font-mono bg-amber-100 px-1 rounded">app.js</code> for true multi-device realtime sync.</p>
+    </div>
+  </div>
+
+  <main class="max-w-6xl mx-auto px-4 sm:px-6 py-5">
+
+    <!-- ===================================================================
+         STAT CARDS — quick system status
+         =================================================================== -->
+    <section class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+      <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+        <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400">📦 Total Items</p>
+        <p id="stat-total" class="text-2xl font-extrabold mt-1">0</p>
+      </div>
+      <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+        <p class="text-[11px] font-bold uppercase tracking-wider text-emerald-500">✅ In Stock</p>
+        <p id="stat-avail" class="text-2xl font-extrabold mt-1 text-emerald-600">0</p>
+      </div>
+      <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+        <p class="text-[11px] font-bold uppercase tracking-wider text-red-400">🚫 Sold Out</p>
+        <p id="stat-out" class="text-2xl font-extrabold mt-1 text-red-500">0</p>
+      </div>
+      <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+        <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400">🗂 Categories</p>
+        <p id="stat-cats" class="text-2xl font-extrabold mt-1">0</p>
+      </div>
+    </section>
+
+    <!-- ===================================================================
+         REAL-TIME INVENTORY TABLE
+         Every row re-renders instantly when anything changes in the DB.
+         =================================================================== -->
+    <section class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div class="flex items-center justify-between px-4 sm:px-5 py-3.5 border-b border-slate-100">
+        <h2 class="font-extrabold text-sm sm:text-base">Menu Inventory</h2>
+        <a href="index.html" target="_blank" rel="noopener"
+           class="text-xs font-semibold text-brand-600 hover:text-brand-700 flex items-center gap-1">
+          Customer View ↗
+        </a>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="inv-table">
+          <thead>
+            <tr>
+              <th colspan="2">Item</th>
+              <th>Category</th>
+              <th>Price</th>
+              <th>Availability</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="admin-tbody">
+            <!-- Rows injected by app.js renderAdminTable() -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Empty state: no items in the database yet -->
+      <div id="admin-empty" class="hidden text-center py-16">
+        <div class="text-5xl mb-3">🍽️</div>
+        <p class="font-semibold text-slate-600">No items on the menu yet</p>
+        <p class="text-sm text-slate-400 mt-1">Click “+ Add New Item” to create your first dish.</p>
+      </div>
+    </section>
+
+    <p class="text-center text-[11px] text-slate-400 mt-6 pb-4">
+      Toggle a switch and every customer screen updates in under a second — no refresh needed.
+    </p>
+  </main>
+
+  <!-- =====================================================================
+       ADD / EDIT ITEM MODAL
+       ===================================================================== -->
+  <div id="item-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div id="modal-scrim" class="modal-scrim"></div>
+
+    <div class="modal-card">
+      <!-- Modal header -->
+      <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
+        <h2 id="modal-title" class="font-extrabold">➕ Add New Item</h2>
+        <button data-close-modal aria-label="Close"
+                class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center text-lg leading-none">×</button>
+      </div>
+
+      <!-- Modal body: item form -->
+      <form id="item-form" class="px-5 py-4 overflow-y-auto space-y-4" novalidate>
+        <div>
+          <label for="f-name" class="block text-xs font-bold text-slate-600 mb-1.5">Item Name <span class="text-red-500">*</span></label>
+          <input id="f-name" class="field" type="text" placeholder="e.g. Filter Coffee" maxlength="40" autocomplete="off">
+          <p id="f-name-err" class="err-text hidden">Item name is required.</p>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label for="f-cat" class="block text-xs font-bold text-slate-600 mb-1.5">Category</label>
+            <select id="f-cat" class="field">
+              <option>Hot Drinks</option>
+              <option>Snacks</option>
+              <option>Tiffin</option>
+              <option>Desserts</option>
+              <option>Others</option>
+            </select>
+          </div>
+          <div>
+            <label for="f-price" class="block text-xs font-bold text-slate-600 mb-1.5">Price (₹) <span class="text-red-500">*</span></label>
+            <input id="f-price" class="field" type="number" inputmode="decimal" min="1" step="0.5" placeholder="e.g. 25">
+            <p id="f-price-err" class="err-text hidden">Enter a price greater than 0.</p>
+          </div>
+        </div>
+
+        <div>
+          <label for="f-image" class="block text-xs font-bold text-slate-600 mb-1.5">
+            Image URL <span class="text-slate-300 font-medium">(optional)</span>
+          </label>
+          <input id="f-image" class="field" type="url" placeholder="https://…/photo.jpg" autocomplete="off">
+          <p class="text-[11px] text-slate-400 mt-1.5">Leave blank to use a colourful initials badge instead.</p>
+        </div>
+
+        <!-- Availability toggle -->
+        <div class="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-xl px-4 py-3">
+          <div>
+            <p class="text-sm font-bold text-slate-700">Available for ordering</p>
+            <p class="text-[11px] text-slate-400">Off = shows a red “Sold Out” badge on customer screens</p>
+          </div>
+          <label class="switch">
+            <input id="f-stock" type="checkbox" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+      </form>
+
+      <!-- Modal footer -->
+      <div class="flex gap-3 px-5 py-4 border-t border-slate-100 shrink-0">
+        <button type="button" data-close-modal
+                class="flex-1 border border-slate-200 hover:bg-slate-50 text-slate-600 font-bold text-sm py-3 rounded-xl transition">
+          Cancel
+        </button>
+        <button type="submit" form="item-form"
+                class="flex-1 bg-brand-600 hover:bg-brand-700 active:scale-[.99] text-white font-bold text-sm py-3 rounded-xl shadow-lg shadow-orange-500/25 transition">
+          Save Item
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Firebase (v9 compat build → classic v8-style API) ============== -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+  <!-- ===== App engine (shared with index.html) ============================ -->
+  <script src="app.js"></script>
+</body>
+</html>
