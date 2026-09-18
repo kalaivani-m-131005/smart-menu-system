@@ -50,7 +50,7 @@
 /** Shop's WhatsApp number, full international format, digits only
  *  (e.g. India 91 + 10-digit number → '919876543210'). Orders are delivered
  *  to this number through the universal wa.me deep link. */
-const SHOP_PHONE_NUMBER = '919876543210';
+const SHOP_PHONE_NUMBER = '919976775973;
 
 /** Shop identity, rendered in headers, page titles and the WhatsApp message. */
 const SHOP_NAME = 'Central Cafe';
